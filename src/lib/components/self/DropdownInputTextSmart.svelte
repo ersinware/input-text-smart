@@ -4,17 +4,18 @@
     // import * as Command from "$lib/components/ui/command/index.js";
     import * as Command from "$lib/components/ui/command/index.js";
     import CheckIcon from '@lucide/svelte/icons/check'
-    import { cn } from '$lib/utils.js'
+    import { ChevronsDownUpIcon } from '@lucide/svelte'
     import { onMount } from 'svelte'
 
-    let { stateDropdown = $bindable(), onColumnSelected } = $props(),
-        columns = $state.raw([]),
+    let { stateDropdown, onColumnSelected } = $props(),
+        columns = $state([]),
         fetched = $state.raw()
 
     onMount(async () => {
         const response = await fetch('/api/get-columns')
         if (response.ok) {
             const body = await response.json()
+
             if (body.columns)
                 columns = body.columns
         }
@@ -22,9 +23,11 @@
         fetched = true
     })
 
-    function _onColumnSelected(value, label) {
-        onColumnSelected(value, label)
-        stateDropdown.open = false
+    function onCollapsibleItemClick(event, column) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        column.open = !column.open
     }
 </script>
 
@@ -44,13 +47,39 @@
                     <Command.Empty>No column found.</Command.Empty>
 
                     <Command.Group value="columns">
-                        {#each columns as column (column.value)}
-                            <Command.Item value={column.value}
-                                          onSelect={() => {_onColumnSelected(column.value, column.label)}}>
-                                <CheckIcon class={cn(stateDropdown.value !== column.value && "text-transparent")}/>
+                        {#each columns as column}
+                            {#if column.value instanceof Array}
+                                <Command.Item class="cursor-pointer"
+                                              value={column.label}
+                                              onclick={event => onCollapsibleItemClick(event, column)}>
 
-                                {column.label}
-                            </Command.Item>
+                                    <ChevronsDownUpIcon class="!h-[.9rem]"/>
+
+                                    {column.label}
+                                </Command.Item>
+
+                                {#each column.value as innerColumn}
+                                    <Command.Item class="ml-2 cursor-pointer {!column.open ? 'hidden' : '' }"
+                                                  value={innerColumn.label}
+                                                  onSelect={() => onColumnSelected(innerColumn.value, innerColumn.label)}>
+
+                                        <CheckIcon
+                                                class={stateDropdown.value !== innerColumn.value && "text-transparent"}/>
+
+                                        {innerColumn.label}
+                                    </Command.Item>
+                                {/each}
+                            {:else}
+                                <Command.Item class="cursor-pointer"
+                                              value={column.label}
+                                              onSelect={() =>  onColumnSelected(column.value, column.label)}>
+
+                                    <CheckIcon
+                                            class={stateDropdown.value !== column.value && "text-transparent"}/>
+
+                                    {column.label}
+                                </Command.Item>
+                            {/if}
                         {/each}
                     </Command.Group>
                 </Command.List>

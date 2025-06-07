@@ -1,123 +1,110 @@
 <script>
     import { Label } from '@/components/ui/label/index.js'
     import DropdownInputTextSmart from '@/components/self/DropdownInputTextSmart.svelte'
-    import { createBadge, getPositionOfCaret, moveCaretAfter } from '@/js/util.input.text.smart.js'
+    import { calculatePositionOfDropdown, createBadge, setResultOfInputTextSmart } from '@/js/util.input.text.smart.js'
+    import { yieldToMain } from '@/js/util.js'
 
     let stateDropdown = $state({}),
-        refTextarea
+        refTextbox,
+        refResult,
+        range,
+        badgeToEdit
 
-    function onKeyDown(event) {
+    async function onKeyDown(event) {
         if (event.key !== '/')
             return
 
         event.preventDefault()
 
-        const selection = window.getSelection()
-        if (!selection.rangeCount)
-            return
-
-        const range = selection.getRangeAt(0),
-            placeholder = document.createElement('span') // Placeholder
-
-        placeholder.id = 'badge-placeholder'
-        range.insertNode(placeholder) // Insert the placeholder at the caret position
-
-        // Get the position of the placeholder to open the dropdown
-        const { x, y } = getPositionOfCaret(refTextarea)
-        stateDropdown.open = true
-        stateDropdown.x = x
-        stateDropdown.y = y
+        range = window.getSelection().getRangeAt(0)
+        const { x, y } = calculatePositionOfDropdown(refTextbox)
+        stateDropdown = { open: true, x, y }
     }
 
-    function onColumnSelected(value, label) {
-        // --- Editing an existing badge ---
-        const badgeToEdit = refTextarea.querySelector('#editing-badge')
+    function onKeyUp() {
+        // When the text box has no text to remove <br> element - it brakes position of the caret
+        if (!setResultOfInputTextSmart(refTextbox, refResult))
+            refTextbox.innerHTML = ''
+    }
+
+    async function onColumnSelected(value, label) {
+        stateDropdown.open = false
+
+        await yieldToMain()
+
         if (badgeToEdit) {
-            if (badgeToEdit.getAttribute('data-value') === value) {
-                adjustCaretAndFocus(badgeToEdit)
+            badgeToEdit.dataset.value = value
+            badgeToEdit.innerText = label
 
-                return
-            }
+            // --- Adjust the caret position ---
+            const range = document.createRange()
+            range.setStartAfter(badgeToEdit)
+            range.collapse(true)
 
-            const badge = createBadge(value, label)
-            badge.addEventListener('click', onBadgeClick)
+            const selection = window.getSelection()
+            selection.removeAllRanges()
+            selection.addRange(range)
 
-            badgeToEdit.parentNode.replaceChild(badge, badgeToEdit)
+            refTextbox.focus()
 
-            const space = document.createTextNode('\u00A0')
-            badge.after(space)
-
-            adjustCaretAndFocus(space)
+            clear()
 
             return
         }
 
-        // --- Creating a new badge ---
-        // Find the placeholder previously inserted
-        const placeholder = refTextarea.querySelector('#badge-placeholder')
-        if (!placeholder)
-            return
-
-        // Create the badge element
+        // --- Create a badge and adjust the caret position ---
         const badge = createBadge(value, label)
         badge.addEventListener('click', onBadgeClick)
 
-        // Replace the placeholder with the new badge
-        placeholder.parentNode.replaceChild(badge, placeholder)
+        range.insertNode(badge)
+        range.collapse(false)
 
-        // Create a space after the badge
-        const space = document.createTextNode('\u00A0')
-        badge.after(space)
+        const selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(range)
 
-        adjustCaretAndFocus(space)
+        refTextbox.focus()
 
-        function adjustCaretAndFocus(after) {
-            setTimeout(
-                () => {
-                    moveCaretAfter(after)
-                    refTextarea.focus()
-                },
-                0
-            )
-        }
+        clear()
     }
 
     function onBadgeClick(event) {
-        const currentlyEditing = refTextarea.querySelector('#editing-badge')
-        if (currentlyEditing)
-            currentlyEditing.removeAttribute('id')
+        badgeToEdit = event.currentTarget
 
-        const clickedBadge = event.currentTarget
-        clickedBadge.id = 'editing-badge'
+        const badgeRect = badgeToEdit.getBoundingClientRect(),
+            containerRect = refTextbox.getBoundingClientRect()
 
-        const badgeRect = clickedBadge.getBoundingClientRect(),
-            containerRect = refTextarea.getBoundingClientRect()
-
-        stateDropdown.value = clickedBadge.getAttribute('data-value')
-        stateDropdown.x = badgeRect.left - containerRect.left
-        stateDropdown.y = badgeRect.top - containerRect.top
-        stateDropdown.open = true
+        stateDropdown = {
+            open: true,
+            value: badgeToEdit.dataset.value,
+            x: badgeRect.width / 2 + badgeRect.left - containerRect.left,
+            y: badgeRect.top - containerRect.top
+        }
     }
 
     function onKeyDownWindow(event) {
+        // When multiple instances of this component exists
+        if (!range)
+            return
+
         if (event.key !== 'Escape')
             return
 
-        const placeholder = refTextarea.querySelector('#badge-placeholder')
-        if (placeholder) {
-            const selection = window.getSelection(),
-                range = document.createRange()
+        // --- Reserve the caret position and focus to the text box ---
+        const selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(range)
 
-            range.selectNode(placeholder)
+        refTextbox.focus()
 
-            placeholder.remove()
+        clear()
+    }
 
-            range.collapse(true)
-            selection.removeAllRanges()
-            selection.addRange(range)
-        }
-
+    function clear() {
         stateDropdown = {}
+        range = undefined
+        badgeToEdit = undefined
+        setResultOfInputTextSmart(refTextbox, refResult)
     }
 </script>
 
@@ -128,12 +115,13 @@
 
     <div class="relative">
         <div id="input-text-smart"
-             bind:this={refTextarea}
-             class="min-h-[10rem] border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 field-sizing-content shadow-xs w-full rounded-md border bg-transparent px-3 py-2 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+             bind:this={refTextbox}
+             class="min-h-[10rem] whitespace-pre-wrap border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 field-sizing-content shadow-xs w-full rounded-md border bg-transparent px-3 py-2 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
              contenteditable
              tabindex="0"
              role="textbox"
-             onkeydown={onKeyDown}>
+             onkeydown={onKeyDown}
+             onkeyup={onKeyUp}>
         </div>
 
         {#if stateDropdown.open}
@@ -141,7 +129,9 @@
         {/if}
     </div>
 
-    <p class="text-muted-foreground text-sm">
+    <p class="text-muted-foreground text-base md:text-sm">
         Type '/' to open the dropdown. To update a badge, click on it.
     </p>
+
+    <p bind:this={refResult} class="mt-4 text-base md:text-sm">The result text will be here.</p>
 </div>

@@ -5,24 +5,28 @@ export function GET() {
         {
             columns: [
                 {
-                    value: 'linkedin-profile',
-                    label: 'LinkedIn Profile',
+                    value: 'Ersin Karaer',
+                    label: 'Full Name'
                 },
                 {
-                    value: 'first-name',
+                    value: 'Ersin',
                     label: 'First Name'
                 },
                 {
-                    value: 'last-name',
+                    value: 'Karaer',
                     label: 'Last Name'
                 },
                 {
-                    value: 'headline',
-                    label: 'Headline'
+                    value: 'Software Engineer',
+                    label: 'Job Title'
                 },
                 {
-                    value: 'summary',
-                    label: 'Summary'
+                    value: [
+                        { label: 'LinkedIn Profile', value: 'https://linkedin.com/in/ersinware' },
+                        { label: 'LinkedIn Project Number', value: '13' },
+                        { label: 'LinkedIn Experience', value: '3' },
+                    ],
+                    label: 'LinkedIn'
                 }
             ]
         }
